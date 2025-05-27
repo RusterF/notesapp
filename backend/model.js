@@ -1,18 +1,18 @@
 import pool from "./database.js";
-import bcrypt from "bcryptjs"; // Added in previous step for User class
+import bcrypt from "bcryptjs";
 
 export class Note {
   static async find(userId) {
-    // Add userId parameter
     try {
       const [rows] = await pool.query(
-        "SELECT * FROM notes WHERE user_id = ? ORDER BY createdAt DESC", // Filter by user_id
+        "SELECT * FROM notes WHERE user_id = ? ORDER BY createdAt DESC",
         [userId]
       );
       return rows.map((row) => ({
         ...row,
         _id: row.id,
-        tags: JSON.parse(row.tags || "[]"),
+        id: row.id,
+        tags: row.tags || [], // Use directly, default to empty array if null
       }));
     } catch (error) {
       console.error("Error fetching notes:", error);
@@ -21,18 +21,18 @@ export class Note {
   }
 
   static async findById(id, userId) {
-    // Add userId parameter
     try {
       const [rows] = await pool.query(
         "SELECT * FROM notes WHERE id = ? AND user_id = ?",
         [id, userId]
-      ); // Check user_id
+      );
       if (!rows[0]) return null;
       const note = rows[0];
       return {
         ...note,
         _id: note.id,
-        tags: JSON.parse(note.tags || "[]"),
+        id: note.id,
+        tags: note.tags || [], // Use directly, default to empty array if null
       };
     } catch (error) {
       console.error(`Error finding note with id ${id}:`, error);
@@ -41,11 +41,13 @@ export class Note {
   }
 
   static async create({ title, content, tags, userId }) {
-    // Add userId parameter
     try {
-      const tagsJson = JSON.stringify(tags || []);
+      // Ensure tags is an array before stringifying, even if input is null/undefined
+      const tagsToStore = tags && Array.isArray(tags) ? tags : [];
+      const tagsJson = JSON.stringify(tagsToStore);
+
       const [result] = await pool.query(
-        "INSERT INTO notes (title, content, tags, user_id) VALUES (?, ?, ?, ?)", // Add user_id
+        "INSERT INTO notes (title, content, tags, user_id) VALUES (?, ?, ?, ?)",
         [title, content, tagsJson, userId]
       );
       const [newNoteRows] = await pool.query(
@@ -56,7 +58,8 @@ export class Note {
       return {
         ...newNote,
         _id: newNote.id,
-        tags: JSON.parse(newNote.tags || "[]"),
+        id: newNote.id,
+        tags: newNote.tags || [], // Use directly, default to empty array if null
       };
     } catch (error) {
       console.error("Error creating note:", error);
@@ -65,17 +68,18 @@ export class Note {
   }
 
   static async findByIdAndUpdate(id, { title, content, tags }, userId) {
-    // Add userId parameter
     try {
-      // First, verify the note belongs to the user
       const existingNote = await this.findById(id, userId);
       if (!existingNote) {
-        return null; // Or throw an error indicating not found or not authorized
+        return null;
       }
 
-      const tagsJson = JSON.stringify(tags || []);
+      // Ensure tags is an array before stringifying, even if input is null/undefined
+      const tagsToStore = tags && Array.isArray(tags) ? tags : [];
+      const tagsJson = JSON.stringify(tagsToStore);
+
       await pool.query(
-        "UPDATE notes SET title = ?, content = ?, tags = ? WHERE id = ? AND user_id = ?", // Check user_id
+        "UPDATE notes SET title = ?, content = ?, tags = ? WHERE id = ? AND user_id = ?",
         [title, content, tagsJson, id, userId]
       );
       return this.findById(id, userId);
@@ -86,16 +90,15 @@ export class Note {
   }
 
   static async findByIdAndDelete(id, userId) {
-    // Add userId parameter
     try {
-      const note = await this.findById(id, userId); // Verify ownership
+      const note = await this.findById(id, userId);
       if (!note) return null;
-      //
+
       await pool.query("DELETE FROM notes WHERE id = ? AND user_id = ?", [
         id,
         userId,
-      ]); // Check user_id
-      return note; // Return the note that was deleted (or just a success indicator)
+      ]);
+      return note;
     } catch (error) {
       console.error(`Error deleting note with id ${id}:`, error);
       throw error;
@@ -103,7 +106,6 @@ export class Note {
   }
 }
 
-// User class from previous step here...
 export class User {
   static async create({ username, password }) {
     try {
@@ -121,6 +123,7 @@ export class User {
       throw error;
     }
   }
+
   static async findByUsername(username) {
     try {
       const [rows] = await pool.query(
@@ -128,9 +131,9 @@ export class User {
         [username]
       );
       if (rows.length > 0) {
-        return rows[0]; // Return the user object
+        return rows[0];
       }
-      return null; // Return null if user not found
+      return null;
     } catch (error) {
       console.error(`Error finding user by username ${username}:`, error);
       throw error;
