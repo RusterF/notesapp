@@ -121,4 +121,19 @@ export class User {
       throw error;
     }
   }
+  static async findByUsername(username) {
+    try {
+      const [rows] = await pool.query(
+        "SELECT * FROM users WHERE username = ?",
+        [username]
+      );
+      if (rows.length > 0) {
+        return rows[0]; // Return the user object
+      }
+      return null; // Return null if user not found
+    } catch (error) {
+      console.error(`Error finding user by username ${username}:`, error);
+      throw error;
+    }
+  }
 }
